@@ -2,7 +2,7 @@
 
 Your AI coding tokens as a contribution-style heatmap — **without faking your real GitHub grass.**
 
-![AI usage](card.svg)
+[![AI usage](https://raw.githubusercontent.com/ppirae/ai-usage/main/card.svg)](https://ppirae.github.io/ai-usage/)
 
 Every other tool in this space renders a card and then commits it to a repo every day, which quietly
 fills your real contribution graph with automated commits. tokengrass authors those commits as an

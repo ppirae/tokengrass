@@ -49,7 +49,35 @@ const { values, positionals } = parseArgs({
 })
 
 const outDir = resolve(values.out ?? process.cwd())
-const git = (args, opts = {}) => spawnSync('git', args, { cwd: outDir, encoding: 'utf8', ...opts })
+
+/**
+ * Resolve the git binary once, instead of trusting a bare `git` on PATH.
+ *
+ * A scheduled task / cron job runs with a slimmer environment than the shell that ran `init`, and
+ * there a bare `git` can fail to spawn even though `git --version` works fine in a terminal. The
+ * failure is silent and indistinguishable from "this folder isn't a repo", so the daily run keeps
+ * writing the card and never commits it — which is exactly how a card can sit stale for a day
+ * while every run reports success. Prefer $TOKENGRASS_GIT, then PATH, then the usual install paths.
+ */
+function resolveGit() {
+  const candidates = [
+    process.env.TOKENGRASS_GIT,
+    'git',
+    ...(process.platform === 'win32'
+      ? ['C:\\Program Files\\Git\\cmd\\git.exe', 'C:\\Program Files (x86)\\Git\\cmd\\git.exe']
+      : ['/usr/bin/git', '/usr/local/bin/git', '/opt/homebrew/bin/git']),
+  ].filter(Boolean)
+  for (const candidate of candidates) {
+    if (spawnSync(candidate, ['--version'], { encoding: 'utf8' }).status === 0) return candidate
+  }
+  return null
+}
+
+const GIT = resolveGit()
+const git = (args, opts = {}) =>
+  GIT
+    ? spawnSync(GIT, args, { cwd: outDir, encoding: 'utf8', ...opts })
+    : { status: 1, stdout: '', stderr: 'git not found' }
 const gitOut = (args) => {
   const r = git(args)
   return r.status === 0 ? r.stdout.trim() : ''
@@ -119,9 +147,22 @@ async function run() {
   console.log(`${days} days · ${human(total)} tokens${from} → ${join(outDir, 'card.svg')}`)
 
   if (values['no-commit']) return
+  // Exit non-zero, never "skip quietly": a daily run that writes the card but silently stops
+  // committing looks identical to success, so the card goes stale with nothing to notice it by.
+  if (!GIT) {
+    console.error('git not found. Set TOKENGRASS_GIT to its full path (scheduled jobs often have a slimmer PATH than your shell).')
+    process.exit(1)
+  }
   if (!isRepo) {
-    console.log('Not a git repo — skipping commit. Run `tokengrass init` here first.')
-    return
+    // Print what git actually said. "Not a repo" and "repo I refuse to touch" look identical from
+    // the exit code alone, and the most common cause of the latter under a scheduled run is
+    // `detected dubious ownership` — the folder is owned by Administrators because an elevated
+    // shell created it, while the task runs unelevated. Without git's own message that is
+    // invisible, and the run just looks like it was pointed at the wrong folder.
+    const why = (git(['rev-parse', '--is-inside-work-tree']).stderr || '').trim()
+    console.error(`Not a git repo: ${outDir}. Run \`tokengrass init\` here first.`)
+    if (why) console.error(why)
+    process.exit(1)
   }
 
   git(['add', 'data', 'card.svg', 'index.html'])
@@ -140,7 +181,13 @@ async function run() {
 
   if (values['no-push']) return
   const push = hasUpstream ? git(['push']) : git(['push', '-u', 'origin', 'HEAD'])
-  console.log(push.status === 0 ? 'Pushed.' : `Push failed:\n${push.stderr.trim()}`)
+  if (push.status !== 0) {
+    // Same reasoning as the git/repo guards: a commit that never reaches the remote leaves the
+    // published card stale, and a zero exit code gives the scheduler nothing to report.
+    console.error(`Push failed:\n${(push.stderr || '').trim()}`)
+    process.exit(1)
+  }
+  console.log('Pushed.')
 }
 
 /**
