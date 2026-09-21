@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
@@ -150,7 +150,22 @@ async function run() {
  */
 function selfCommand() {
   const self = fileURLToPath(import.meta.url)
-  return /[\\/](?:node_modules|_npx)[\\/]/.test(self) ? 'npx -y tokengrass' : `node "${self}"`
+  // A clone run straight off disk schedules that same file. An npx install sits
+  // in a cache directory that npm is free to prune, so schedule the spec that
+  // fetched it instead of the path it landed in.
+  if (!/[\\/](?:node_modules|_npx)[\\/]/.test(self)) return `node "${self}"`
+  return `npx -y ${packageSpec()}`
+}
+
+/** `github:owner/repo` from our own package.json, so forks schedule themselves. */
+function packageSpec() {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    const slug = (pkg.repository?.url ?? '').match(/github\.com[:/](.+?)(?:\.git)?$/)
+    return slug ? `github:${slug[1]}` : pkg.name
+  } catch {
+    return 'tokengrass'
+  }
 }
 
 function schedule(at) {
