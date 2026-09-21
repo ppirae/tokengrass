@@ -18,6 +18,7 @@ const HELP = `tokengrass — your AI coding tokens as a heatmap, without faking 
 
   npx tokengrass            scan logs, write data/<device>.json + card.svg, commit & push
   npx tokengrass init       set this folder up as a card repo and schedule a daily run
+  npx tokengrass uninstall  remove the scheduled run (files and the pushed card stay)
 
 Options
   --out <dir>     where to write (default: cwd)
@@ -182,6 +183,26 @@ function schedule(at) {
   return w.status === 0 ? 'Scheduled daily via crontab.' : `Add this to your crontab manually:\n  ${line}`
 }
 
+function uninstall() {
+  if (process.platform === 'win32') {
+    const r = spawnSync('schtasks', ['/Delete', '/TN', 'tokengrass', '/F'], { encoding: 'utf8' })
+    console.log(r.status === 0 ? 'Removed the scheduled task.' : 'No scheduled task was registered.')
+  } else {
+    const current = spawnSync('crontab', ['-l'], { encoding: 'utf8' })
+    const kept = (current.status === 0 ? current.stdout : '').split('\n').filter((l) => !l.includes('tokengrass'))
+    const w = spawnSync('crontab', ['-'], { input: `${kept.join('\n').trimEnd()}\n`, encoding: 'utf8' })
+    console.log(w.status === 0 ? 'Removed the crontab entry.' : 'Could not edit crontab — remove the tokengrass line yourself.')
+  }
+  console.log(`
+This only stops the daily run. Still on this machine, by design:
+  - ${outDir} (the repo and its data)
+  - your GitHub credentials, if you ran \`gh auth login\` here
+
+On a machine you are handing back, clear the credentials too:
+  gh auth logout
+`)
+}
+
 function init() {
   if (gitOut(['rev-parse', '--is-inside-work-tree']) !== 'true') {
     git(['init', '-b', 'main'])
@@ -206,6 +227,8 @@ if (values.help) {
   console.log(HELP)
 } else if (positionals[0] === 'init') {
   init()
+} else if (positionals[0] === 'uninstall') {
+  uninstall()
 } else if (positionals.length) {
   console.error(`Unknown command: ${positionals[0]}\n\n${HELP}`)
   process.exit(1)

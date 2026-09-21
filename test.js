@@ -109,6 +109,8 @@ const assistant = (ts, usage, ids = {}) =>
   assert.doesNotMatch(page, /<img/, 'an <img>-referenced svg renders flat, with no hover')
   assert.match(page, /<title>a &amp; b<\/title>/, 'page title is escaped')
   assert.match(page, /<title>2026-09-20: 10 tokens<\/title>/, 'per-day tooltip survives into the page')
+  assert.match(page, /rect > title/, 'page promotes the svg titles into its own tooltip')
+  assert.match(page, /rect\[data-tip\]/, 'and hovers off a data attribute, not the slow native tooltip')
 }
 
 // --- merge: two machines add up on shared days, keep their own elsewhere ------

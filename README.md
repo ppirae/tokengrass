@@ -89,9 +89,23 @@ next run — every run rescans the full history rather than appending, so a miss
 ## Usage
 
 ```
-npx tokengrass            scan logs, write data.json + card.svg, commit & push
+npx tokengrass            scan logs, update the card, commit & push
 npx tokengrass init       set this folder up as a card repo and schedule a daily run
+npx tokengrass uninstall  remove the scheduled run
 ```
+
+### Leaving a machine behind
+
+`init` schedules a job and `gh auth login` stores a GitHub token in that machine's credential store.
+On a work laptop you are handing back, both should go:
+
+```sh
+npx tokengrass uninstall   # stops the daily run
+gh auth logout             # removes the stored token
+```
+
+Your card and its history live in the repo, so nothing is lost. Run `init` on the next machine and it
+picks up where this one left off — a new machine writes a new `data/` file and the old one stays.
 
 | flag | |
 |---|---|

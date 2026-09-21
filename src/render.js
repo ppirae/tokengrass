@@ -37,13 +37,42 @@ export function renderPage(svg, { title = 'AI Coding Activity' } = {}) {
          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
   main { padding: 24px; max-width: 100%; }
   svg { max-width: 100%; height: auto; }
+  rect[data-tip]:hover { stroke: #f0944e; stroke-width: 1; }
   p { margin: 12px 2px 0; font-size: 12px; color: #7d8590; }
   a { color: #7d8590; }
+  #tip { position: fixed; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .1s;
+         background: #1b1f24; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
+         padding: 4px 8px; font-size: 12px; white-space: nowrap;
+         transform: translate(-50%, -100%); }
+  #tip[data-show] { opacity: 1; }
 </style>
 <main>
 ${svg.trim()}
 <p>Hover a day for its date and token count · built with <a href="https://github.com/ppirae/tokengrass">tokengrass</a></p>
 </main>
+<div id="tip"></div>
+<script>
+  // The SVG keeps its <title> elements so tooltips still work when the file is
+  // opened on its own, but in the page they would be slow OS tooltips on a 9px
+  // target. Move them aside and drive an instant one instead.
+  const tip = document.getElementById('tip')
+  for (const t of document.querySelectorAll('rect > title')) {
+    t.parentNode.dataset.tip = t.textContent
+    t.remove()
+  }
+  document.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('rect[data-tip]')
+    if (!cell) return
+    const box = cell.getBoundingClientRect()
+    tip.textContent = cell.dataset.tip
+    tip.style.left = box.left + box.width / 2 + 'px'
+    tip.style.top = box.top - 6 + 'px'
+    tip.setAttribute('data-show', '')
+  })
+  document.addEventListener('mouseout', (e) => {
+    if (e.target.closest('rect[data-tip]')) tip.removeAttribute('data-show')
+  })
+</script>
 </html>
 `
 }
