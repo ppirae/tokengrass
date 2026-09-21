@@ -12,9 +12,11 @@ address that isn't connected to any GitHub account, so the card updates and your
 
 ```sh
 mkdir ai-usage && cd ai-usage
-npx tokengrass init        # git repo + a daily scheduled run
-npx tokengrass             # scan, render, commit, push
+npx github:ppirae/tokengrass init    # git repo + a daily scheduled run
+npx github:ppirae/tokengrass         # scan, render, commit, push
 ```
+
+(Not on npm yet, hence the `github:` prefix.)
 
 Then drop this in your profile README:
 

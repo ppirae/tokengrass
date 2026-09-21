@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { claudeProjectsDir, deviceId, human, mergeDaily, scanUsage } from '../src/usage.js'
 import { renderCard } from '../src/render.js'
@@ -15,7 +16,7 @@ const BOT_NAME = 'tokengrass'
 
 const HELP = `tokengrass — your AI coding tokens as a heatmap, without faking your real GitHub grass
 
-  npx tokengrass            scan logs, write data.json + card.svg, commit & push
+  npx tokengrass            scan logs, write data/<device>.json + card.svg, commit & push
   npx tokengrass init       set this folder up as a card repo and schedule a daily run
 
 Options
@@ -75,8 +76,9 @@ async function run() {
   }
 
   const isRepo = gitOut(['rev-parse', '--is-inside-work-tree']) === 'true'
+  const hasUpstream = isRepo && !!gitOut(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])
   // Pull first so other machines' files are on disk before we merge and render.
-  if (isRepo && gitOut(['remote'])) git(['pull', '--rebase', '--autostash'])
+  if (hasUpstream) git(['pull', '--rebase', '--autostash'])
 
   // One file per machine: every device only ever writes its own, so two laptops
   // pushing to the same repo add up instead of overwriting each other.
@@ -130,21 +132,43 @@ async function run() {
   console.log(values.grass ? 'Committed with your identity — this will show on your contribution graph.' : 'Committed as an unlinked author — your contribution graph is untouched.')
 
   if (values['no-push']) return
-  const push = git(['push'])
+  const push = hasUpstream ? git(['push']) : git(['push', '-u', 'origin', 'HEAD'])
   console.log(push.status === 0 ? 'Pushed.' : `Push failed:\n${push.stderr.trim()}`)
+}
+
+/**
+ * What the scheduled job should run. Installed copies go through npx; a clone
+ * run straight from disk schedules that same file, so it keeps working without
+ * a published package.
+ */
+function selfCommand() {
+  const self = fileURLToPath(import.meta.url)
+  return /[\\/](?:node_modules|_npx)[\\/]/.test(self) ? 'npx -y tokengrass' : `node "${self}"`
 }
 
 function schedule(at) {
   if (process.platform === 'win32') {
     const r = spawnSync(
       'schtasks',
-      ['/Create', '/F', '/SC', 'DAILY', '/ST', at, '/TN', 'tokengrass', '/TR', `cmd /c cd /d "${outDir}" && npx -y tokengrass`],
+      ['/Create', '/F', '/SC', 'DAILY', '/ST', at, '/TN', 'tokengrass', '/TR', `cmd /c cd /d "${outDir}" && ${selfCommand()}`],
       { encoding: 'utf8' },
     )
-    return r.status === 0 ? 'Scheduled daily via schtasks (task "tokengrass").' : `Could not schedule: ${r.stderr.trim()}`
+    if (r.status !== 0) return `Could not schedule: ${r.stderr.trim()}`
+    // schtasks defaults to skipping the run on battery, which on a laptop quietly
+    // means never. StartWhenAvailable also catches up after the machine was off.
+    spawnSync(
+      'powershell',
+      [
+        '-NoProfile',
+        '-Command',
+        'Set-ScheduledTask -TaskName tokengrass -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable)',
+      ],
+      { encoding: 'utf8' },
+    )
+    return 'Scheduled daily via schtasks (task "tokengrass").'
   }
   const [h, m] = at.split(':')
-  const line = `${Number(m)} ${Number(h)} * * * cd ${outDir} && npx -y tokengrass`
+  const line = `${Number(m)} ${Number(h)} * * * cd ${outDir} && ${selfCommand()}`
   const current = spawnSync('crontab', ['-l'], { encoding: 'utf8' })
   const existing = current.status === 0 ? current.stdout : ''
   if (existing.includes('tokengrass')) return 'crontab already has a tokengrass entry.'
