@@ -21,6 +21,33 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c])
 
+/**
+ * The same card as a page. Inlined rather than <img>-referenced on purpose: an
+ * SVG pulled in through <img> renders as a flat image, so the per-day <title>
+ * tooltips only work when the markup is part of the document.
+ */
+export function renderPage(svg, { title = 'AI Coding Activity' } = {}) {
+  return `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #010409;
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { padding: 24px; max-width: 100%; }
+  svg { max-width: 100%; height: auto; }
+  p { margin: 12px 2px 0; font-size: 12px; color: #7d8590; }
+  a { color: #7d8590; }
+</style>
+<main>
+${svg.trim()}
+<p>Hover a day for its date and token count · built with <a href="https://github.com/ppirae/tokengrass">tokengrass</a></p>
+</main>
+</html>
+`
+}
+
 /** Columns of 7 days, oldest first, last column holding `end`. */
 export function buildGrid(daily, { end = new Date(), weeks = 53, timeZone } = {}) {
   const start = new Date(end)

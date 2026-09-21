@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { claudeProjectsDir, deviceId, human, mergeDaily, scanUsage } from '../src/usage.js'
-import { renderCard } from '../src/render.js'
+import { renderCard, renderPage } from '../src/render.js'
 
 // Authoring commits as an address that is not attached to any GitHub account is
 // what keeps the real contribution calendar clean — GitHub only counts commits
@@ -54,12 +54,17 @@ const gitOut = (args) => {
   return r.status === 0 ? r.stdout.trim() : ''
 }
 
-function rawUrl() {
+function urls() {
   const remote = gitOut(['remote', 'get-url', 'origin'])
   const m = remote.match(/github\.com[:/](.+?)(?:\.git)?$/)
   const branch = gitOut(['rev-parse', '--abbrev-ref', 'HEAD']) || 'main'
-  const slug = m ? m[1] : '<you>/<repo>'
-  return `https://raw.githubusercontent.com/${slug}/${branch}/card.svg`
+  const [owner, repo] = (m ? m[1] : '<you>/<repo>').split('/')
+  return {
+    raw: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/card.svg`,
+    // A README <img> renders the card flat, so the per-day tooltips only exist
+    // on the Pages copy — link the card there rather than pretend otherwise.
+    pages: `https://${owner}.github.io/${repo}/`,
+  }
 }
 
 async function run() {
@@ -105,6 +110,7 @@ async function run() {
     timeZone: values.tz,
   })
   await writeFile(join(outDir, 'card.svg'), svg)
+  await writeFile(join(outDir, 'index.html'), renderPage(svg, { title: values.title }))
 
   const days = Object.keys(merged).length
   const total = Object.values(merged).reduce((s, d) => s + d.in + d.out + d.cacheR + d.cacheW, 0)
@@ -117,7 +123,7 @@ async function run() {
     return
   }
 
-  git(['add', 'data', 'card.svg'])
+  git(['add', 'data', 'card.svg', 'index.html'])
   if (git(['diff', '--cached', '--quiet']).status === 0) {
     console.log('No change since last run.')
     return
@@ -182,15 +188,17 @@ function init() {
     console.log('Initialised a git repo here.')
   }
   console.log(schedule(values.at ?? '09:00'))
+  const { raw, pages } = urls()
   console.log(`
 Done. Next:
   1. create a repo and point origin at it, e.g.
        gh repo create ai-usage --public --source . --remote origin
   2. run once to fill the card:
        npx tokengrass
-  3. embed it in your profile README:
+  3. turn on GitHub Pages (Settings > Pages > main / root) so the hoverable
+     copy is live, then embed this in your profile README:
 
-![AI usage](${rawUrl()})
+<a href="${pages}"><img src="${raw}" alt="AI coding activity" title="Hover each day on the full page"></a>
 `)
 }
 

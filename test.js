@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { hostname } from 'node:os'
 import { dayTotal, deviceId, foldLine, human, levelOf, levelThresholds, mergeDaily, streak } from './src/usage.js'
-import { buildGrid, renderCard } from './src/render.js'
+import { buildGrid, renderCard, renderPage } from './src/render.js'
 
 const TZ = 'UTC'
 const rec = (o) => JSON.stringify(o)
@@ -97,6 +97,18 @@ const assistant = (ts, usage, ids = {}) =>
   assert.match(svg, /a &amp; b/, 'title is xml-escaped')
   assert.doesNotMatch(svg, /project|feature\/internal/, 'no path or branch may reach the card')
   assert.equal((svg.match(/<rect/g) || []).length, drawn + 1 + 5, 'one rect per drawn day, plus card bg and legend')
+}
+
+// --- page: svg must be inlined, or the per-day tooltips die ------------------
+{
+  const daily = { '2026-09-20': { in: 1, out: 2, cacheR: 3, cacheW: 4 } }
+  const svg = renderCard(daily, { end: new Date('2026-09-21T12:00:00Z'), weeks: 4, timeZone: TZ })
+  const page = renderPage(svg, { title: 'a & b' })
+  assert.match(page, /^<!doctype html>/)
+  assert.ok(page.includes(svg.trim()), 'svg must be inlined verbatim, not referenced')
+  assert.doesNotMatch(page, /<img/, 'an <img>-referenced svg renders flat, with no hover')
+  assert.match(page, /<title>a &amp; b<\/title>/, 'page title is escaped')
+  assert.match(page, /<title>2026-09-20: 10 tokens<\/title>/, 'per-day tooltip survives into the page')
 }
 
 // --- merge: two machines add up on shared days, keep their own elsewhere ------

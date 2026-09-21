@@ -54,6 +54,22 @@ still in the repo and the card still updates — the calendar just doesn't count
 
 Want the grass? `--grass` commits with your own git identity instead.
 
+## Hovering a day
+
+Each cell carries a `<title>` with its date and token count, but a README renders the card through
+`<img>`, and an SVG pulled in that way is a flat image — no tooltips, no hover, no links. GitHub also
+strips `<style>`, `<script>`, `<object>`, `<iframe>`, image maps and inline `<svg>` from markdown, so
+there is no surface left to attach anything to. Per-day hover inside a README is not possible.
+
+What works instead: every run also writes `index.html`, the same card inlined into a page where the
+tooltips do fire. Turn on GitHub Pages for the repo and link the card at it:
+
+```html
+<a href="https://<you>.github.io/ai-usage/"><img src="https://raw.githubusercontent.com/<you>/ai-usage/main/card.svg" alt="AI coding activity"></a>
+```
+
+Static card in the README, hoverable card one click away.
+
 ## More than one machine
 
 The scan is local, so each machine only sees its own `~/.claude`. Run `init` on every machine you
